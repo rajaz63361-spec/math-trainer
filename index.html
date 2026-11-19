@@ -10,13 +10,6 @@
         
         .app-container { max-width: 850px; margin: 0 auto; background: white; border-radius: 12px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); position: relative; }
         h3 { text-align: center; color: #2c3e50; margin-bottom: 10px; font-size: 1.15rem; }
-
-        .admin-bar { display: none; background: #2c3e50; color: #f1c40f; padding: 10px; border-radius: 8px; margin-bottom: 12px; border: 2px dashed #f1c40f; font-size: 0.85rem; }
-        .admin-bar-title { font-weight: bold; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
-        .admin-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-        .admin-actions button { padding: 6px 10px; font-size: 0.8rem; background: #34495e; border: 1px solid #7f8c8d; }
-        .admin-actions button:active { background: #1abc9c; color: #2c3e50; }
-        .admin-answer-box { margin-top: 8px; color: #2ecc71; font-weight: bold; font-size: 0.9rem; }
         
         .session-settings { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 12px; background: #f8f9fa; padding: 8px; border-radius: 6px; font-size: 0.9rem; font-weight: bold; }
         .session-settings select { padding: 4px 8px; font-size: 0.9rem; font-weight: bold; border-radius: 4px; border: 2px solid #bdc3c7; }
@@ -24,10 +17,10 @@
         .score-board { display: flex; justify-content: space-between; align-items: center; background: #34495e; color: white; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; font-weight: bold; font-size: 0.9rem; }
         .score-board span { color: #2ecc71; }
         
-        .controls { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 12px; }
-        button { padding: 10px 5px; border: none; border-radius: 6px; background: #3498db; color: white; font-weight: bold; font-size: 0.9rem; cursor: pointer; }
+        .controls { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; margin-bottom: 12px; }
+        button { padding: 10px 4px; border: none; border-radius: 6px; background: #3498db; color: white; font-weight: bold; font-size: 0.9rem; cursor: pointer; }
         button:active { transform: scale(0.98); }
-        button.op-btn { background: #e67e22; font-size: 1.1rem; }
+        button.op-btn { background: #e67e22; font-size: 1.05rem; }
         button.op-btn.active { background: #d35400; box-shadow: inset 0 0 5px rgba(0,0,0,0.4); }
         
         .action-container { display: flex; gap: 10px; margin-bottom: 12px; }
@@ -63,6 +56,16 @@
         
         .matrix-cell.div-corner-right { border-right: 2px solid #2c3e50; }
         .matrix-cell.div-corner-bottom { border-bottom: 2px solid #2c3e50; }
+
+        /* Стили для блока геометрии (выбор из 3 вариантов) */
+        .geom-container { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 10px 10px 35px; width: 100%; }
+        .geom-prompt { font-size: 1rem; color: #2c3e50; margin-bottom: 10px; text-align: center; }
+        .geom-svg-box { background: rgba(255, 255, 255, 0.9); border: 2px solid #bdc3c7; border-radius: 8px; padding: 10px; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; }
+        .geom-options { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 300px; }
+        .geom-opt-btn { width: 100%; padding: 11px 14px; font-size: 1rem; font-weight: bold; background: #f8f9fa; color: #2c3e50; border: 2px solid #bdc3c7; border-radius: 8px; cursor: pointer; transition: all 0.15s; }
+        .geom-opt-btn.selected { background: #d6eaf8; border-color: #2980b9; color: #1a5276; box-shadow: 0 0 0 2px rgba(41, 128, 185, 0.25); }
+        .geom-opt-btn.cell-correct { background-color: #d4edda !important; color: #155724 !important; border-color: #28a745 !important; }
+        .geom-opt-btn.cell-incorrect { background-color: #f8d7da !important; color: #721c24 !important; border-color: #dc3545 !important; }
 
         #result-msg { text-align: center; font-weight: bold; font-size: 1.05rem; margin-top: 5px; min-height: 25px; }
         .correct-text { color: #2ecc71; }
@@ -104,21 +107,6 @@
 
 <div class="app-container">
     <h3>Математический Контрольный Тренажёр</h3>
-
-    <div class="admin-bar" id="admin-panel">
-        <div class="admin-bar-title">
-            <span>🛠️ РЕЖИМ АДМИНИСТРАТОРА</span>
-            <button type="button" onclick="exitAdminMode()" style="background:#e74c3c; padding:3px 8px; font-size:0.75rem;">Выйти</button>
-        </div>
-        <div class="admin-actions">
-            <button type="button" onclick="adminAutoFill()">⚡ Авто-ответ</button>
-            <button type="button" onclick="adminAddPoint()">+1 Балл</button>
-            <button type="button" onclick="adminFinishNow()">🏁 Финал</button>
-            <button type="button" onclick="adminToggleOp('pow')">Вкл/Выкл aⁿ</button>
-            <button type="button" onclick="adminToggleOp('div')">Вкл/Выкл ÷</button>
-        </div>
-        <div class="admin-answer-box" id="admin-secret-ans">Правильный ответ: —</div>
-    </div>
     
     <div class="session-settings">
         <label for="total-tasks-select">Примеров в сессии:</label>
@@ -141,6 +129,7 @@
         <button class="op-btn" id="btn-mul" onclick="selectOperation('mul')">×</button>
         <button class="op-btn" id="btn-div" onclick="selectOperation('div')">÷</button>
         <button class="op-btn" id="btn-pow" onclick="selectOperation('pow')">aⁿ</button>
+        <button class="op-btn" id="btn-geom" onclick="selectOperation('geom')">📐</button>
     </div>
 
     <button id="toggle-pad-btn" onclick="toggleScratchpad()">📝 Показать черновик</button>
@@ -165,7 +154,7 @@
     </div>
 
     <div class="footer-contact">
-        По вопросам и предложениям: <a href="mailto:rajaz63361@gmail.com">rajaz63361@gmail.com</a>
+        По вопросам и предложениям: <a href="mailto: rajaz63361@gmail.com">rajaz63361@gmail.com</a>
     </div>
 </div>
 
@@ -184,6 +173,9 @@
     let currentCorrectAnswer = 0;
     let num1 = 0, num2 = 0;
     let powData = null; 
+    let currentGeomTask = null;
+    let selectedGeomAnswer = '';
+    let lastGeomIndex = -1;
     
     let currentTaskIndex = 1;
     let correctCount = 0;
@@ -196,9 +188,64 @@
         sub: 'Вычитание (-)',
         mul: 'Умножение (×)',
         div: 'Деление (÷)',
-        pow: 'Степени (aⁿ)'
+        pow: 'Степени (aⁿ)',
+        geom: 'Геометрия (📐)'
     };
 
+    const geometryTasks = [
+        {
+            name: 'Точка',
+            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><circle cx="110" cy="70" r="5" fill="#2c3e50"/><text x="118" y="64" font-size="18" font-weight="bold" fill="#e74c3c">A</text></svg>'
+        },
+        {
+            name: 'Отрезок',
+            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><line x1="40" y1="75" x2="180" y2="75" stroke="#2c3e50" stroke-width="3"/><circle cx="40" cy="75" r="4.5" fill="#e74c3c"/><circle cx="180" cy="75" r="4.5" fill="#e74c3c"/><text x="34" y="62" font-size="16" font-weight="bold" fill="#2c3e50">A</text><text x="175" y="62" font-size="16" font-weight="bold" fill="#2c3e50">B</text></svg>'
+        },
+        {
+            name: 'Луч',
+            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><line x1="45" y1="80" x2="195" y2="55" stroke="#2c3e50" stroke-width="3"/><polyline points="183,50 196,55 186,64" fill="none" stroke="#2c3e50" stroke-width="3"/><circle cx="45" cy="80" r="5" fill="#e74c3c"/><text x="38" y="68" font-size="16" font-weight="bold" fill="#2c3e50">O</text></svg>'
+        },
+        {
+            name: 'Прямая',
+            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><line x1="20" y1="95" x2="200" y2="45" stroke="#2c3e50" stroke-width="3"/><text x="105" y="60" font-size="18" font-style="italic" font-weight="bold" fill="#2980b9">a</text></svg>'
+        },
+        {
+            name: 'Острый угол',
+            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><polyline points="175,35 55,110 185,110" fill="none" stroke="#2c3e50" stroke-width="3"/><path d="M 95,110 A 40,40 0 0,0 88,89" fill="none" stroke="#e74c3c" stroke-width="2.5"/><circle cx="55" cy="110" r="4" fill="#2c3e50"/></svg>'
+        },
+        {
+            name: 'Прямой угол',
+            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><polyline points="70,25 70,115 170,115" fill="none" stroke="#2c3e50" stroke-width="3"/><polyline points="70,95 90,95 90,115" fill="none" stroke="#e74c3c" stroke-width="2.5"/><circle cx="70" cy="115" r="4" fill="#2c3e50"/></svg>'
+        },
+        {
+            name: 'Тупой угол',
+            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><polyline points="35,40 105,110 195,110" fill="none" stroke="#2c3e50" stroke-width="3"/><path d="M 140,110 A 35,35 0 0,0 80,85" fill="none" stroke="#e74c3c" stroke-width="2.5"/><circle cx="105" cy="110" r="4" fill="#2c3e50"/></svg>'
+        },
+        {
+            name: 'Развёрнутый угол',
+            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><line x1="25" y1="85" x2="195" y2="85" stroke="#2c3e50" stroke-width="3"/><path d="M 140,85 A 30,30 0 0,0 80,85" fill="none" stroke="#e74c3c" stroke-width="2.5"/><circle cx="110" cy="85" r="4.5" fill="#e74c3c"/><text x="104" y="106" font-size="16" font-weight="bold" fill="#2c3e50">O</text></svg>'
+        },
+        {
+            name: 'Треугольник',
+            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><polygon points="110,22 45,118 175,118" fill="rgba(52,152,219,0.1)" stroke="#2c3e50" stroke-width="3"/></svg>'
+        },
+        {
+            name: 'Квадрат',
+            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><rect x="65" y="25" width="90" height="90" fill="rgba(46,204,113,0.1)" stroke="#2c3e50" stroke-width="3"/><polyline points="65,40 80,40 80,25" fill="none" stroke="#e74c3c" stroke-width="2"/><line x1="110" y1="19" x2="110" y2="31" stroke="#2980b9" stroke-width="2"/><line x1="110" y1="109" x2="110" y2="121" stroke="#2980b9" stroke-width="2"/><line x1="59" y1="70" x2="71" y2="70" stroke="#2980b9" stroke-width="2"/><line x1="149" y1="70" x2="161" y2="70" stroke="#2980b9" stroke-width="2"/></svg>'
+        },
+        {
+            name: 'Прямоугольник',
+            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><rect x="40" y="35" width="140" height="75" fill="rgba(52,152,219,0.1)" stroke="#2c3e50" stroke-width="3"/><polyline points="40,50 55,50 55,35" fill="none" stroke="#e74c3c" stroke-width="2"/><polyline points="165,110 165,95 180,95" fill="none" stroke="#e74c3c" stroke-width="2"/></svg>'
+        },
+        {
+            name: 'Ромб',
+            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><polygon points="110,18 175,70 110,122 45,70" fill="rgba(155,89,182,0.1)" stroke="#2c3e50" stroke-width="3"/><line x1="74" y1="40" x2="82" y2="49" stroke="#e74c3c" stroke-width="2"/><line x1="146" y1="40" x2="138" y2="49" stroke="#e74c3c" stroke-width="2"/><line x1="74" y1="100" x2="82" y2="91" stroke="#e74c3c" stroke-width="2"/><line x1="146" y1="100" x2="138" y2="91" stroke="#e74c3c" stroke-width="2"/></svg>'
+        },
+        {
+            name: 'Окружность',
+            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><circle cx="110" cy="70" r="48" fill="none" stroke="#2c3e50" stroke-width="3"/><circle cx="110" cy="70" r="3.5" fill="#e74c3c"/><line x1="110" y1="70" x2="158" y2="70" stroke="#2980b9" stroke-width="2" stroke-dasharray="4"/><text x="98" y="65" font-size="15" font-weight="bold" fill="#2c3e50">O</text></svg>'
+        }
+    ];
     function toggleScratchpad() {
         const pad = document.getElementById('pad');
         const btn = document.getElementById('toggle-pad-btn');
@@ -276,9 +323,14 @@
                 currentCorrectAnswer = p1.val;
             }
         }
-
-        const ansBox = document.getElementById('admin-secret-ans');
-        if (ansBox) ansBox.textContent = 'Правильный ответ: ' + currentCorrectAnswer;
+        else if (currentOperation === 'geom') {
+            let idx;
+            do {
+                idx = Math.floor(Math.random() * geometryTasks.length);
+            } while (idx === lastGeomIndex && geometryTasks.length > 1);
+            lastGeomIndex = idx;
+            currentGeomTask = geometryTasks.at(idx);
+        }
         
         buildInteractiveGrid();
     }
@@ -287,14 +339,60 @@
         if (!targetInput || typeof targetInput.focus !== 'function') return;
         setTimeout(() => {
             targetInput.focus();
-            targetInput.select();
+            if (typeof targetInput.select === 'function') targetInput.select();
         }, 60);
     }
+
     function buildInteractiveGrid() {
         const container = document.getElementById('math-matrix-container');
         container.innerHTML = '';
         solutionMatrix = [];
         inputFlow = [];
+
+        if (currentOperation === 'geom') {
+            selectedGeomAnswer = '';
+            const box = document.createElement('div');
+            box.className = 'geom-container';
+
+            const prompt = document.createElement('div');
+            prompt.className = 'geom-prompt';
+            prompt.textContent = 'Выбери правильное название фигуры:';
+            box.appendChild(prompt);
+
+            const svgBox = document.createElement('div');
+            svgBox.className = 'geom-svg-box';
+            svgBox.innerHTML = currentGeomTask.svg;
+            box.appendChild(svgBox);
+
+            const otherNames = geometryTasks
+                .filter(t => t.name !== currentGeomTask.name)
+                .map(t => t.name)
+                .sort(() => Math.random() - 0.5)
+                .slice(0, 2);
+
+            const choices = [currentGeomTask.name, ...otherNames].sort(() => Math.random() - 0.5);
+
+            const optsWrap = document.createElement('div');
+            optsWrap.className = 'geom-options';
+
+            choices.forEach(choiceName => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'geom-opt-btn';
+                btn.textContent = choiceName;
+                btn.addEventListener('click', function() {
+                    if (btn.disabled) return;
+                    optsWrap.querySelectorAll('.geom-opt-btn').forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    selectedGeomAnswer = choiceName;
+                });
+                optsWrap.appendChild(btn);
+            });
+
+            box.appendChild(optsWrap);
+            container.appendChild(box);
+            return;
+        }
 
         let ansStr = currentCorrectAnswer.toString();
 
@@ -374,7 +472,6 @@
             focusFirstInput(ansInputs.at(0));
             return;
         }
-
         let s1 = num1.toString();
         let s2 = num2.toString();
         let sign = currentOperation === 'add' ? '+' : currentOperation === 'sub' ? '-' : currentOperation === 'mul' ? '×' : '÷';
@@ -507,7 +604,6 @@
             focusFirstInput(quotientInputs.at(0));
         }
     }
-
     function createRowElement() {
         let row = document.createElement('div');
         row.className = 'matrix-row';
@@ -580,6 +676,40 @@
     }
 
     function checkAnswer() {
+        const msg = document.getElementById('result-msg');
+
+        if (currentOperation === 'geom') {
+            if (!selectedGeomAnswer) {
+                msg.innerHTML = "Сначала нажми на один из трёх вариантов!";
+                msg.className = "incorrect-text";
+                return;
+            }
+
+            const buttons = document.querySelectorAll('.geom-opt-btn');
+            buttons.forEach(btn => {
+                btn.disabled = true;
+                if (btn.textContent === currentGeomTask.name) {
+                    btn.classList.add('cell-correct');
+                } else if (btn.textContent === selectedGeomAnswer && selectedGeomAnswer !== currentGeomTask.name) {
+                    btn.classList.add('cell-incorrect');
+                }
+            });
+
+            if (selectedGeomAnswer === currentGeomTask.name) {
+                correctCount++;
+                msg.innerHTML = `Верно! Это ${currentGeomTask.name.toLowerCase()}. 🌟`;
+                msg.className = "correct-text";
+            } else {
+                msg.innerHTML = `Ошибка! Правильный ответ: ${currentGeomTask.name}.`;
+                msg.className = "incorrect-text";
+            }
+
+            document.getElementById('check-btn').style.display = 'none';
+            document.getElementById('next-btn').style.display = 'flex';
+            document.getElementById('correct-counter').textContent = correctCount;
+            return;
+        }
+
         let allCorrect = true;
         let hasEmptyFields = false;
 
@@ -590,7 +720,6 @@
         });
 
         if (hasEmptyFields) {
-            const msg = document.getElementById('result-msg');
             msg.innerHTML = "Сначала заполни все клетки ответа!";
             msg.className = "incorrect-text";
             const emptyCell = solutionMatrix.slice().reverse().find(el => el.value.trim() === "");
@@ -612,8 +741,6 @@
             }
         });
 
-        const msg = document.getElementById('result-msg');
-        
         if (allCorrect) {
             correctCount++;
             msg.innerHTML = "Абсолютно верно! Присвоено 1 очко. 🌟";
@@ -759,51 +886,8 @@
     padHeader.addEventListener('pointerup', endDragPointer);
     padHeader.addEventListener('pointercancel', endDragPointer);
 
-    const ADMIN_KEY = '2026';
-
-    function checkAdminAccess() {
-        const params = new URLSearchParams(window.location.search);
-        if (params.get('admin') === ADMIN_KEY) {
-            localStorage.setItem('math_trainer_admin', 'true');
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
-        if (localStorage.getItem('math_trainer_admin') === 'true') {
-            document.getElementById('admin-panel').style.display = 'block';
-        }
-    }
-
-    function exitAdminMode() {
-        localStorage.removeItem('math_trainer_admin');
-        document.getElementById('admin-panel').style.display = 'none';
-    }
-
-    function adminAutoFill() {
-        solutionMatrix.forEach(inp => {
-            if (!inp.disabled) {
-                inp.value = inp.dataset.expected;
-                inp.className = '';
-            }
-        });
-    }
-
-    function adminAddPoint() {
-        correctCount++;
-        document.getElementById('correct-counter').textContent = correctCount;
-    }
-
-    function adminFinishNow() {
-        showFinalModal();
-    }
-
-    function adminToggleOp(op) {
-        const btn = document.getElementById('btn-' + op);
-        if (btn) {
-            btn.style.display = (btn.style.display === 'none') ? 'block' : 'none';
-        }
-    }
-
-    checkAdminAccess();
     selectOperation('add');
 </script>
 </body>
 </html>
+
