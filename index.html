@@ -22,6 +22,18 @@
         button:active { transform: scale(0.98); }
         button.op-btn { background: #e67e22; font-size: 1.05rem; }
         button.op-btn.active { background: #d35400; box-shadow: inset 0 0 5px rgba(0,0,0,0.4); }
+        button.op-btn.locked { background: #95a5a6; cursor: not-allowed; opacity: 0.75; position: relative; }
+        button.op-btn.locked::after {
+            content: attr(data-lock-text);
+            position: absolute;
+            bottom: 2px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.55rem;
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+            white-space: nowrap;
+        }
         
         .action-container { display: flex; gap: 10px; margin-bottom: 12px; }
         button#check-btn { background: #2ecc71; flex: 2; font-size: 1.1rem; padding: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; }
@@ -154,7 +166,7 @@
     </div>
 
     <div class="footer-contact">
-        По вопросам и предложениям: <a href="mailto: rajaz63361@gmail.com">rajaz63361@gmail.com</a>
+        По вопросам и предложениям: <a href="mailto:rajaz63361@gmail.com">rajaz63361@gmail.com</a>
     </div>
 </div>
 
@@ -246,6 +258,41 @@
             svg: '<svg width="220" height="140" viewBox="0 0 220 140"><circle cx="110" cy="70" r="48" fill="none" stroke="#2c3e50" stroke-width="3"/><circle cx="110" cy="70" r="3.5" fill="#e74c3c"/><line x1="110" y1="70" x2="158" y2="70" stroke="#2980b9" stroke-width="2" stroke-dasharray="4"/><text x="98" y="65" font-size="15" font-weight="bold" fill="#2c3e50">O</text></svg>'
         }
     ];
+
+    /* ============ Блокировка геометрии ============ */
+    const GEOM_UNLOCK_KEY = 'geomUnlockCount';
+    const GEOM_UNLOCK_NEEDED = 5;
+
+    function getGeomUnlockProgress() {
+        return parseInt(sessionStorage.getItem(GEOM_UNLOCK_KEY) || '0', 10);
+    }
+
+    function incrementGeomUnlockProgress() {
+        const current = getGeomUnlockProgress();
+        sessionStorage.setItem(GEOM_UNLOCK_KEY, String(current + 1));
+        updateGeomButtonState();
+    }
+
+    function isGeomUnlocked() {
+        return getGeomUnlockProgress() >= GEOM_UNLOCK_NEEDED;
+    }
+
+    function updateGeomButtonState() {
+        const btn = document.getElementById('btn-geom');
+        const progress = getGeomUnlockProgress();
+        if (isGeomUnlocked()) {
+            btn.classList.remove('locked');
+            btn.removeAttribute('data-lock-text');
+            btn.textContent = '📐';
+        } else {
+            btn.classList.add('locked');
+            const remaining = GEOM_UNLOCK_NEEDED - progress;
+            btn.setAttribute('data-lock-text', `ещё ${remaining}`);
+            btn.textContent = '🔒';
+        }
+    }
+    /* ============================================== */
+
     function toggleScratchpad() {
         const pad = document.getElementById('pad');
         const btn = document.getElementById('toggle-pad-btn');
@@ -260,12 +307,26 @@
     }
 
     function selectOperation(type) {
+        if (type === 'geom' && !isGeomUnlocked()) {
+            const remaining = GEOM_UNLOCK_NEEDED - getGeomUnlockProgress();
+            const msg = document.getElementById('result-msg');
+            msg.innerHTML = `🔒 Геометрия заблокирована! Решите ещё ${remaining} пример${getExampleWordForm(remaining)} в других режимах.`;
+            msg.className = 'incorrect-text';
+            return;
+        }
+
         document.querySelectorAll('.op-btn').forEach(b => b.classList.remove('active'));
         const activeBtn = document.getElementById('btn-' + type);
         if (activeBtn) activeBtn.classList.add('active');
         
         currentOperation = type;
         restartSession();
+    }
+
+    function getExampleWordForm(n) {
+        if (n === 1) return '';
+        if (n >= 2 && n <= 4) return 'а';
+        return 'ов';
     }
 
     function createRandomPower() {
@@ -743,6 +804,7 @@
 
         if (allCorrect) {
             correctCount++;
+            incrementGeomUnlockProgress();
             msg.innerHTML = "Абсолютно верно! Присвоено 1 очко. 🌟";
             msg.className = "correct-text";
         } else {
@@ -886,8 +948,8 @@
     padHeader.addEventListener('pointerup', endDragPointer);
     padHeader.addEventListener('pointercancel', endDragPointer);
 
+    updateGeomButtonState();
     selectOperation('add');
 </script>
 </body>
 </html>
-
