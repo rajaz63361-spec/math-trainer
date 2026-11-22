@@ -40,6 +40,26 @@
         button#next-btn { background: #34495e; flex: 1; font-size: 1.1rem; padding: 12px; display: none; align-items: center; justify-content: center; gap: 8px; }
         button#toggle-pad-btn { background: #9b59b6; width: 100%; margin-bottom: 12px; font-size: 0.9rem; padding: 8px; }
 
+        .sound-toggle {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: #ecf0f1;
+            border: none;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 10;
+            color: #2c3e50;
+            transition: background 0.2s;
+        }
+        .sound-toggle:hover { background: #d5dbdb; }
+
         .notebook-wrapper { overflow-x: auto; margin-bottom: 12px; border: 2px solid #7f8c8d; border-radius: 4px; background: #fff; }
         .notebook {
             background-color: #fff;
@@ -136,6 +156,8 @@
 <body>
 
 <div class="app-container">
+    <button class="sound-toggle" id="sound-toggle" onclick="toggleSound()" title="Звук">🔊</button>
+
     <h3>Математический Контрольный Тренажёр</h3>
 
     <div class="session-settings">
@@ -200,6 +222,89 @@
 </div>
 
 <script>
+    // ============ Звуковая система ============
+    let audioCtx = null;
+    let soundEnabled = true;
+    let audioInitialized = false;
+
+    function initAudio() {
+        if (audioInitialized) return;
+        try {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            audioInitialized = true;
+        } catch(e) {
+            soundEnabled = false;
+        }
+    }
+
+    function ensureAudio() {
+        if (!soundEnabled) return false;
+        if (!audioInitialized) initAudio();
+        if (!audioCtx) return false;
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+        return true;
+    }
+
+    function toggleSound() {
+        soundEnabled = !soundEnabled;
+        const btn = document.getElementById('sound-toggle');
+        btn.textContent = soundEnabled ? '🔊' : '🔇';
+        if (soundEnabled) {
+            ensureAudio();
+            playTick();
+        }
+    }
+
+    function playTone(freq, type, duration, volume = 0.15, delay = 0) {
+        if (!ensureAudio()) return;
+        const t = audioCtx.currentTime + delay;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, t);
+        gain.gain.setValueAtTime(volume, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(t);
+        osc.stop(t + duration);
+    }
+
+    function playTick() { if (soundEnabled) playTone(420, 'square', 0.035, 0.08); }
+    function playClick() { if (soundEnabled) playTone(950, 'sine', 0.045, 0.12); }
+    function playDraw() { if (soundEnabled) playTone(680, 'triangle', 0.065, 0.1); }
+    function playClose() {
+        if (!soundEnabled) return;
+        playTone(523.25, 'sine', 0.12, 0.12, 0.0);
+        playTone(659.25, 'sine', 0.14, 0.10, 0.07);
+    }
+    function playSuccess() {
+        if (!soundEnabled) return;
+        playTone(523.25, 'sine', 0.10, 0.12, 0.00);
+        playTone(659.25, 'sine', 0.10, 0.11, 0.08);
+        playTone(783.99, 'sine', 0.10, 0.10, 0.16);
+        playTone(1046.50, 'sine', 0.22, 0.10, 0.24);
+    }
+    function playError() {
+        if (!soundEnabled) return;
+        playTone(280, 'sawtooth', 0.12, 0.08, 0.00);
+        playTone(180, 'sawtooth', 0.22, 0.06, 0.10);
+    }
+    function playFinish() {
+        if (!soundEnabled) return;
+        playTone(523.25, 'sine', 0.15, 0.10, 0.00);
+        playTone(659.25, 'sine', 0.15, 0.10, 0.12);
+        playTone(783.99, 'sine', 0.15, 0.10, 0.24);
+        playTone(987.77, 'sine', 0.15, 0.10, 0.36);
+        playTone(1046.50, 'sine', 0.35, 0.12, 0.48);
+    }
+    function playVibrate(pattern) {
+        if (navigator.vibrate) navigator.vibrate(pattern);
+    }
+
+    // ============ Основное приложение ============
     let currentOperation = '';
     let currentCorrectAnswer = 0;
     let num1 = 0, num2 = 0;
@@ -214,8 +319,7 @@
     let solutionMatrix = [];
     let inputFlow = [];
 
-    // === Геометрия: режим и черчение ===
-    let currentGeomMode = 'test'; // 'test' | 'draw'
+    let currentGeomMode = 'test';
     let currentDrawTask = null;
     let lastDrawIndex = -1;
     let drawPoints = [];
@@ -231,137 +335,66 @@
         geom: 'Геометрия (📐)'
     };
 
-    /* ============ Базовые фигуры для теста ============ */
     const geometryTasks = [
-        {
-            name: 'Точка',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><circle cx="110" cy="70" r="5" fill="#2c3e50"/><text x="118" y="64" font-size="18" font-weight="bold" fill="#e74c3c">A</text></svg>'
-        },
-        {
-            name: 'Отрезок',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><line x1="40" y1="75" x2="180" y2="75" stroke="#2c3e50" stroke-width="3"/><circle cx="40" cy="75" r="4.5" fill="#e74c3c"/><circle cx="180" cy="75" r="4.5" fill="#e74c3c"/><text x="34" y="62" font-size="16" font-weight="bold" fill="#2c3e50">A</text><text x="175" y="62" font-size="16" font-weight="bold" fill="#2c3e50">B</text></svg>'
-        },
-        {
-            name: 'Луч',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><line x1="45" y1="80" x2="195" y2="55" stroke="#2c3e50" stroke-width="3"/><polyline points="183,50 196,55 186,64" fill="none" stroke="#2c3e50" stroke-width="3"/><circle cx="45" cy="80" r="5" fill="#e74c3c"/><text x="38" y="68" font-size="16" font-weight="bold" fill="#2c3e50">O</text></svg>'
-        },
-        {
-            name: 'Прямая',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><line x1="20" y1="95" x2="200" y2="45" stroke="#2c3e50" stroke-width="3"/><text x="105" y="60" font-size="18" font-style="italic" font-weight="bold" fill="#2980b9">a</text></svg>'
-        },
-        {
-            name: 'Острый угол',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><polyline points="175,35 55,110 185,110" fill="none" stroke="#2c3e50" stroke-width="3"/><path d="M 95,110 A 40,40 0 0,0 88,89" fill="none" stroke="#e74c3c" stroke-width="2.5"/><circle cx="55" cy="110" r="4" fill="#2c3e50"/></svg>'
-        },
-        {
-            name: 'Прямой угол',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><polyline points="70,25 70,115 170,115" fill="none" stroke="#2c3e50" stroke-width="3"/><polyline points="70,95 90,95 90,115" fill="none" stroke="#e74c3c" stroke-width="2.5"/><circle cx="70" cy="115" r="4" fill="#2c3e50"/></svg>'
-        },
-        {
-            name: 'Тупой угол',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><polyline points="35,40 105,110 195,110" fill="none" stroke="#2c3e50" stroke-width="3"/><path d="M 140,110 A 35,35 0 0,0 80,85" fill="none" stroke="#e74c3c" stroke-width="2.5"/><circle cx="105" cy="110" r="4" fill="#2c3e50"/></svg>'
-        },
-        {
-            name: 'Развёрнутый угол',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><line x1="25" y1="85" x2="195" y2="85" stroke="#2c3e50" stroke-width="3"/><path d="M 140,85 A 30,30 0 0,0 80,85" fill="none" stroke="#e74c3c" stroke-width="2.5"/><circle cx="110" cy="85" r="4.5" fill="#e74c3c"/><text x="104" y="106" font-size="16" font-weight="bold" fill="#2c3e50">O</text></svg>'
-        },
-        {
-            name: 'Треугольник',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><polygon points="110,22 45,118 175,118" fill="rgba(52,152,219,0.1)" stroke="#2c3e50" stroke-width="3"/></svg>'
-        },
-        {
-            name: 'Квадрат',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><rect x="65" y="25" width="90" height="90" fill="rgba(46,204,113,0.1)" stroke="#2c3e50" stroke-width="3"/><polyline points="65,40 80,40 80,25" fill="none" stroke="#e74c3c" stroke-width="2"/><line x1="110" y1="19" x2="110" y2="31" stroke="#2980b9" stroke-width="2"/><line x1="110" y1="109" x2="110" y2="121" stroke="#2980b9" stroke-width="2"/><line x1="59" y1="70" x2="71" y2="70" stroke="#2980b9" stroke-width="2"/><line x1="149" y1="70" x2="161" y2="70" stroke="#2980b9" stroke-width="2"/></svg>'
-        },
-        {
-            name: 'Прямоугольник',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><rect x="40" y="35" width="140" height="75" fill="rgba(52,152,219,0.1)" stroke="#2c3e50" stroke-width="3"/><polyline points="40,50 55,50 55,35" fill="none" stroke="#e74c3c" stroke-width="2"/><polyline points="165,110 165,95 180,95" fill="none" stroke="#e74c3c" stroke-width="2"/></svg>'
-        },
-        {
-            name: 'Ромб',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><polygon points="110,18 175,70 110,122 45,70" fill="rgba(155,89,182,0.1)" stroke="#2c3e50" stroke-width="3"/><line x1="74" y1="40" x2="82" y2="49" stroke="#e74c3c" stroke-width="2"/><line x1="146" y1="40" x2="138" y2="49" stroke="#e74c3c" stroke-width="2"/><line x1="74" y1="100" x2="82" y2="91" stroke="#e74c3c" stroke-width="2"/><line x1="146" y1="100" x2="138" y2="91" stroke="#e74c3c" stroke-width="2"/></svg>'
-        },
-        {
-            name: 'Окружность',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><circle cx="110" cy="70" r="48" fill="none" stroke="#2c3e50" stroke-width="3"/><circle cx="110" cy="70" r="3.5" fill="#e74c3c"/><line x1="110" y1="70" x2="158" y2="70" stroke="#2980b9" stroke-width="2" stroke-dasharray="4"/><text x="98" y="65" font-size="15" font-weight="bold" fill="#2c3e50">O</text></svg>'
-        },
-        /* === Новые: фигуры с окружностью / кругом === */
-        {
-            name: 'Дуга',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><path d="M 60,100 A 50,50 0 0,1 160,100" fill="none" stroke="#2c3e50" stroke-width="3"/><circle cx="60" cy="100" r="4" fill="#e74c3c"/><circle cx="160" cy="100" r="4" fill="#e74c3c"/></svg>'
-        },
-        {
-            name: 'Сектор',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><path d="M 110,90 L 60,40 A 50,50 0 0,1 160,40 Z" fill="rgba(52,152,219,0.2)" stroke="#2c3e50" stroke-width="3"/></svg>'
-        },
-        {
-            name: 'Хорда',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><circle cx="110" cy="70" r="45" fill="none" stroke="#2c3e50" stroke-width="2"/><line x1="75" y1="95" x2="145" y2="45" stroke="#e74c3c" stroke-width="3"/><circle cx="75" cy="95" r="3.5" fill="#e74c3c"/><circle cx="145" cy="45" r="3.5" fill="#e74c3c"/></svg>'
-        },
-        {
-            name: 'Диаметр',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><circle cx="110" cy="70" r="45" fill="none" stroke="#2c3e50" stroke-width="2"/><line x1="65" y1="70" x2="155" y2="70" stroke="#e74c3c" stroke-width="3"/><circle cx="65" cy="70" r="3.5" fill="#e74c3c"/><circle cx="155" cy="70" r="3.5" fill="#e74c3c"/><circle cx="110" cy="70" r="3" fill="#2c3e50"/></svg>'
-        },
-        {
-            name: 'Радиус',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><circle cx="110" cy="70" r="45" fill="none" stroke="#2c3e50" stroke-width="2"/><line x1="110" y1="70" x2="155" y2="70" stroke="#e74c3c" stroke-width="3"/><circle cx="110" cy="70" r="3.5" fill="#2c3e50"/><circle cx="155" cy="70" r="3.5" fill="#e74c3c"/></svg>'
-        },
-        {
-            name: 'Касательная',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><circle cx="110" cy="80" r="40" fill="none" stroke="#2c3e50" stroke-width="2"/><line x1="50" y1="40" x2="170" y2="40" stroke="#e74c3c" stroke-width="3"/><circle cx="110" cy="40" r="3.5" fill="#e74c3c"/></svg>'
-        },
-        {
-            name: 'Круг',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><circle cx="110" cy="70" r="48" fill="rgba(52,152,219,0.2)" stroke="#2c3e50" stroke-width="3"/></svg>'
-        },
-        {
-            name: 'Вписанный угол',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><circle cx="110" cy="70" r="45" fill="none" stroke="#2c3e50" stroke-width="2"/><polyline points="70,100 145,35 150,100" fill="none" stroke="#e74c3c" stroke-width="3"/><circle cx="145" cy="35" r="3.5" fill="#e74c3c"/><path d="M 115,70 A 20,20 0 0,0 130,85" fill="none" stroke="#2980b9" stroke-width="2"/></svg>'
-        },
-        {
-            name: 'Центральный угол',
-            svg: '<svg width="220" height="140" viewBox="0 0 220 140"><circle cx="110" cy="70" r="45" fill="none" stroke="#2c3e50" stroke-width="2"/><polyline points="65,70 110,70 140,30" fill="none" stroke="#e74c3c" stroke-width="3"/><circle cx="110" cy="70" r="3.5" fill="#2c3e50"/><path d="M 125,70 A 15,15 0 0,0 118,58" fill="none" stroke="#2980b9" stroke-width="2"/></svg>'
-        }
+        { name: 'Точка',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><circle cx="110" cy="70" r="5" fill="#2c3e50"/><text x="118" y="64" font-size="18" font-weight="bold" fill="#e74c3c">A</text></svg>' },
+        { name: 'Отрезок',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><line x1="40" y1="75" x2="180" y2="75" stroke="#2c3e50" stroke-width="3"/><circle cx="40" cy="75" r="4.5" fill="#e74c3c"/><circle cx="180" cy="75" r="4.5" fill="#e74c3c"/><text x="34" y="62" font-size="16" font-weight="bold" fill="#2c3e50">A</text><text x="175" y="62" font-size="16" font-weight="bold" fill="#2c3e50">B</text></svg>' },
+        { name: 'Луч',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><line x1="45" y1="80" x2="195" y2="55" stroke="#2c3e50" stroke-width="3"/><polyline points="183,50 196,55 186,64" fill="none" stroke="#2c3e50" stroke-width="3"/><circle cx="45" cy="80" r="5" fill="#e74c3c"/><text x="38" y="68" font-size="16" font-weight="bold" fill="#2c3e50">O</text></svg>' },
+        { name: 'Прямая',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><line x1="20" y1="95" x2="200" y2="45" stroke="#2c3e50" stroke-width="3"/><text x="105" y="60" font-size="18" font-style="italic" font-weight="bold" fill="#2980b9">a</text></svg>' },
+        { name: 'Острый угол',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><polyline points="175,35 55,110 185,110" fill="none" stroke="#2c3e50" stroke-width="3"/><path d="M 95,110 A 40,40 0 0,0 88,89" fill="none" stroke="#e74c3c" stroke-width="2.5"/><circle cx="55" cy="110" r="4" fill="#2c3e50"/></svg>' },
+        { name: 'Прямой угол',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><polyline points="70,25 70,115 170,115" fill="none" stroke="#2c3e50" stroke-width="3"/><polyline points="70,95 90,95 90,115" fill="none" stroke="#e74c3c" stroke-width="2.5"/><circle cx="70" cy="115" r="4" fill="#2c3e50"/></svg>' },
+        { name: 'Тупой угол',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><polyline points="35,40 105,110 195,110" fill="none" stroke="#2c3e50" stroke-width="3"/><path d="M 140,110 A 35,35 0 0,0 80,85" fill="none" stroke="#e74c3c" stroke-width="2.5"/><circle cx="105" cy="110" r="4" fill="#2c3e50"/></svg>' },
+        { name: 'Развёрнутый угол',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><line x1="25" y1="85" x2="195" y2="85" stroke="#2c3e50" stroke-width="3"/><path d="M 140,85 A 30,30 0 0,0 80,85" fill="none" stroke="#e74c3c" stroke-width="2.5"/><circle cx="110" cy="85" r="4.5" fill="#e74c3c"/><text x="104" y="106" font-size="16" font-weight="bold" fill="#2c3e50">O</text></svg>' },
+        { name: 'Треугольник',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><polygon points="110,22 45,118 175,118" fill="rgba(52,152,219,0.1)" stroke="#2c3e50" stroke-width="3"/></svg>' },
+        { name: 'Квадрат',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><rect x="65" y="25" width="90" height="90" fill="rgba(46,204,113,0.1)" stroke="#2c3e50" stroke-width="3"/><polyline points="65,40 80,40 80,25" fill="none" stroke="#e74c3c" stroke-width="2"/><line x1="110" y1="19" x2="110" y2="31" stroke="#2980b9" stroke-width="2"/><line x1="110" y1="109" x2="110" y2="121" stroke="#2980b9" stroke-width="2"/><line x1="59" y1="70" x2="71" y2="70" stroke="#2980b9" stroke-width="2"/><line x1="149" y1="70" x2="161" y2="70" stroke="#2980b9" stroke-width="2"/></svg>' },
+        { name: 'Прямоугольник',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><rect x="40" y="35" width="140" height="75" fill="rgba(52,152,219,0.1)" stroke="#2c3e50" stroke-width="3"/><polyline points="40,50 55,50 55,35" fill="none" stroke="#e74c3c" stroke-width="2"/><polyline points="165,110 165,95 180,95" fill="none" stroke="#e74c3c" stroke-width="2"/></svg>' },
+        { name: 'Ромб',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><polygon points="110,18 175,70 110,122 45,70" fill="rgba(155,89,182,0.1)" stroke="#2c3e50" stroke-width="3"/><line x1="74" y1="40" x2="82" y2="49" stroke="#e74c3c" stroke-width="2"/><line x1="146" y1="40" x2="138" y2="49" stroke="#e74c3c" stroke-width="2"/><line x1="74" y1="100" x2="82" y2="91" stroke="#e74c3c" stroke-width="2"/><line x1="146" y1="100" x2="138" y2="91" stroke="#e74c3c" stroke-width="2"/></svg>' },
+        { name: 'Окружность',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><circle cx="110" cy="70" r="48" fill="none" stroke="#2c3e50" stroke-width="3"/><circle cx="110" cy="70" r="3.5" fill="#e74c3c"/><line x1="110" y1="70" x2="158" y2="70" stroke="#2980b9" stroke-width="2" stroke-dasharray="4"/><text x="98" y="65" font-size="15" font-weight="bold" fill="#2c3e50">O</text></svg>' },
+        { name: 'Дуга',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><path d="M 60,100 A 50,50 0 0,1 160,100" fill="none" stroke="#2c3e50" stroke-width="3"/><circle cx="60" cy="100" r="4" fill="#e74c3c"/><circle cx="160" cy="100" r="4" fill="#e74c3c"/></svg>' },
+        { name: 'Сектор',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><path d="M 110,90 L 60,40 A 50,50 0 0,1 160,40 Z" fill="rgba(52,152,219,0.2)" stroke="#2c3e50" stroke-width="3"/></svg>' },
+        { name: 'Хорда',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><circle cx="110" cy="70" r="45" fill="none" stroke="#2c3e50" stroke-width="2"/><line x1="75" y1="95" x2="145" y2="45" stroke="#e74c3c" stroke-width="3"/><circle cx="75" cy="95" r="3.5" fill="#e74c3c"/><circle cx="145" cy="45" r="3.5" fill="#e74c3c"/></svg>' },
+        { name: 'Диаметр',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><circle cx="110" cy="70" r="45" fill="none" stroke="#2c3e50" stroke-width="2"/><line x1="65" y1="70" x2="155" y2="70" stroke="#e74c3c" stroke-width="3"/><circle cx="65" cy="70" r="3.5" fill="#e74c3c"/><circle cx="155" cy="70" r="3.5" fill="#e74c3c"/><circle cx="110" cy="70" r="3" fill="#2c3e50"/></svg>' },
+        { name: 'Радиус',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><circle cx="110" cy="70" r="45" fill="none" stroke="#2c3e50" stroke-width="2"/><line x1="110" y1="70" x2="155" y2="70" stroke="#e74c3c" stroke-width="3"/><circle cx="110" cy="70" r="3.5" fill="#2c3e50"/><circle cx="155" cy="70" r="3.5" fill="#e74c3c"/></svg>' },
+        { name: 'Касательная',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><circle cx="110" cy="80" r="40" fill="none" stroke="#2c3e50" stroke-width="2"/><line x1="50" y1="40" x2="170" y2="40" stroke="#e74c3c" stroke-width="3"/><circle cx="110" cy="40" r="3.5" fill="#e74c3c"/></svg>' },
+        { name: 'Круг',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><circle cx="110" cy="70" r="48" fill="rgba(52,152,219,0.2)" stroke="#2c3e50" stroke-width="3"/></svg>' },
+        { name: 'Вписанный угол',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><circle cx="110" cy="70" r="45" fill="none" stroke="#2c3e50" stroke-width="2"/><polyline points="70,100 145,35 150,100" fill="none" stroke="#e74c3c" stroke-width="3"/><circle cx="145" cy="35" r="3.5" fill="#e74c3c"/><path d="M 115,70 A 20,20 0 0,0 130,85" fill="none" stroke="#2980b9" stroke-width="2"/></svg>' },
+        { name: 'Центральный угол',
+          svg: '<svg width="220" height="140" viewBox="0 0 220 140"><circle cx="110" cy="70" r="45" fill="none" stroke="#2c3e50" stroke-width="2"/><polyline points="65,70 110,70 140,30" fill="none" stroke="#e74c3c" stroke-width="3"/><circle cx="110" cy="70" r="3.5" fill="#2c3e50"/><path d="M 125,70 A 15,15 0 0,0 118,58" fill="none" stroke="#2980b9" stroke-width="2"/></svg>' }
     ];
 
-    /* ============ Задания на черчение ============ */
     const drawTasks = [
-        {
-            name: 'отрезок',
-            minPoints: 2, maxPoints: 2, minLines: 1, maxLines: 1,
-            needsClose: false,
-            hint: 'Кликни дважды по полю: первая точка — начало, вторая — конец отрезка.'
-        },
-        {
-            name: 'треугольник',
-            minPoints: 3, maxPoints: 3, minLines: 3, maxLines: 3,
-            needsClose: true,
-            hint: 'Поставь 3 точки и нажми «Замкнуть», чтобы получить треугольник.'
-        },
-        {
-            name: 'квадрат',
-            minPoints: 4, maxPoints: 4, minLines: 4, maxLines: 4,
-            needsClose: true,
-            hint: 'Поставь 4 точки примерно на равном расстоянии и замкни фигуру.'
-        },
-        {
-            name: 'прямой угол',
-            minPoints: 3, maxPoints: 3, minLines: 2, maxLines: 2,
-            needsClose: false,
-            hint: 'Поставь 3 точки так, чтобы середина была вершиной прямого угла.'
-        },
-        {
-            name: 'прямоугольник',
-            minPoints: 4, maxPoints: 4, minLines: 4, maxLines: 4,
-            needsClose: true,
-            hint: 'Поставь 4 точки и замкни фигуру. Углы должны быть прямые.'
-        },
-        {
-            name: 'ромб',
-            minPoints: 4, maxPoints: 4, minLines: 4, maxLines: 4,
-            needsClose: true,
-            hint: 'Поставь 4 точки на примерно равном расстоянии друг от друга и замкни фигуру.'
-        }
+        { name: 'отрезок', minPoints: 2, maxPoints: 2, minLines: 1, maxLines: 1, needsClose: false,
+          hint: 'Кликни дважды по полю: первая точка — начало, вторая — конец отрезка.' },
+        { name: 'треугольник', minPoints: 3, maxPoints: 3, minLines: 3, maxLines: 3, needsClose: true,
+          hint: 'Поставь 3 точки и нажми «Замкнуть», чтобы получить треугольник.' },
+        { name: 'квадрат', minPoints: 4, maxPoints: 4, minLines: 4, maxLines: 4, needsClose: true,
+          hint: 'Поставь 4 точки примерно на равном расстоянии и замкни фигуру.' },
+        { name: 'прямой угол', minPoints: 3, maxPoints: 3, minLines: 2, maxLines: 2, needsClose: false,
+          hint: 'Поставь 3 точки так, чтобы середина была вершиной прямого угла.' },
+        { name: 'прямоугольник', minPoints: 4, maxPoints: 4, minLines: 4, maxLines: 4, needsClose: true,
+          hint: 'Поставь 4 точки и замкни фигуру. Углы должны быть прямые.' },
+        { name: 'ромб', minPoints: 4, maxPoints: 4, minLines: 4, maxLines: 4, needsClose: true,
+          hint: 'Поставь 4 точки на примерно равном расстоянии друг от друга и замкни фигуру.' }
     ];
 
     /* ============ Блокировка геометрии ============ */
@@ -371,17 +404,14 @@
     function getGeomUnlockProgress() {
         return parseInt(sessionStorage.getItem(GEOM_UNLOCK_KEY) || '0', 10);
     }
-
     function incrementGeomUnlockProgress() {
         const current = getGeomUnlockProgress();
         sessionStorage.setItem(GEOM_UNLOCK_KEY, String(current + 1));
         updateGeomButtonState();
     }
-
     function isGeomUnlocked() {
         return getGeomUnlockProgress() >= GEOM_UNLOCK_NEEDED;
     }
-
     function updateGeomButtonState() {
         const btn = document.getElementById('btn-geom');
         const progress = getGeomUnlockProgress();
@@ -395,6 +425,12 @@
             btn.setAttribute('data-lock-text', `ещё ${remaining}`);
             btn.textContent = '🔒';
         }
+    }
+
+    function getExampleWordForm(n) {
+        if (n === 1) return '';
+        if (n >= 2 && n <= 4) return 'а';
+        return 'ов';
     }
 
     function toggleScratchpad() {
@@ -416,21 +452,16 @@
             const msg = document.getElementById('result-msg');
             msg.innerHTML = `🔒 Геометрия заблокирована! Решите ещё ${remaining} пример${getExampleWordForm(remaining)} в других режимах.`;
             msg.className = 'incorrect-text';
+            playError();
+            playVibrate([60, 40, 60]);
             return;
         }
-
+        playTick();
         document.querySelectorAll('.op-btn').forEach(b => b.classList.remove('active'));
         const activeBtn = document.getElementById('btn-' + type);
         if (activeBtn) activeBtn.classList.add('active');
-
         currentOperation = type;
         restartSession();
-    }
-
-    function getExampleWordForm(n) {
-        if (n === 1) return '';
-        if (n >= 2 && n <= 4) return 'а';
-        return 'ов';
     }
 
     function createRandomPower() {
@@ -440,19 +471,16 @@
         else if (exp === 4) maxBase = 6;
         else if (exp === 5) maxBase = 4;
         else if (exp >= 6) maxBase = 3;
-
         const base = Math.floor(Math.random() * (maxBase - 2 + 1)) + 2;
         return { base: base, exp: exp, val: Math.pow(base, exp) };
     }
 
     function generateExample() {
         if (!currentOperation) return;
-
         maxTasks = parseInt(document.getElementById('total-tasks-select').value);
         document.getElementById('result-msg').innerHTML = '';
         document.getElementById('check-btn').style.display = 'flex';
         document.getElementById('next-btn').style.display = 'none';
-
         document.getElementById('task-counter').textContent = `Пример: ${currentTaskIndex} из ${maxTasks}`;
         document.getElementById('correct-counter').textContent = correctCount;
 
@@ -489,9 +517,7 @@
             }
         }
         else if (currentOperation === 'geom') {
-            // Чередуем тест и черчение случайным образом
             currentGeomMode = Math.random() < 0.5 ? 'test' : 'draw';
-
             if (currentGeomMode === 'test') {
                 let idx;
                 do { idx = Math.floor(Math.random() * geometryTasks.length); }
@@ -506,7 +532,6 @@
                 currentDrawTask = drawTasks[idx];
             }
         }
-
         buildInteractiveGrid();
     }
 
@@ -529,21 +554,17 @@
                 buildDrawGrid(container);
                 return;
             }
-            // === Режим ТЕСТ ===
             selectedGeomAnswer = '';
             const box = document.createElement('div');
             box.className = 'geom-container';
-
             const badge = document.createElement('div');
             badge.className = 'draw-mode-badge test';
             badge.textContent = 'Тест';
             box.appendChild(badge);
-
             const prompt = document.createElement('div');
             prompt.className = 'geom-prompt';
             prompt.textContent = 'Выбери правильное название фигуры:';
             box.appendChild(prompt);
-
             const svgBox = document.createElement('div');
             svgBox.className = 'geom-svg-box';
             svgBox.innerHTML = currentGeomTask.svg;
@@ -554,12 +575,9 @@
                 .map(t => t.name)
                 .sort(() => Math.random() - 0.5)
                 .slice(0, 2);
-
             const choices = [currentGeomTask.name, ...otherNames].sort(() => Math.random() - 0.5);
-
             const optsWrap = document.createElement('div');
             optsWrap.className = 'geom-options';
-
             choices.forEach(choiceName => {
                 const btn = document.createElement('button');
                 btn.type = 'button';
@@ -570,10 +588,10 @@
                     optsWrap.querySelectorAll('.geom-opt-btn').forEach(b => b.classList.remove('selected'));
                     btn.classList.add('selected');
                     selectedGeomAnswer = choiceName;
+                    playClick();
                 });
                 optsWrap.appendChild(btn);
             });
-
             box.appendChild(optsWrap);
             container.appendChild(box);
             return;
@@ -586,7 +604,6 @@
             let b1 = powData.p1.base.toString();
             for (let ch of b1) tokens.push({ text: ch, sup: '' });
             tokens.at(-1).sup = powData.p1.exp.toString();
-
             if (powData.isSum) {
                 tokens.push({ text: '+', sup: '' });
                 let b2 = powData.p2.base.toString();
@@ -594,7 +611,6 @@
                 tokens.at(-1).sup = powData.p2.exp.toString();
             }
             tokens.push({ text: '=', sup: '' });
-
             let totalCols = Math.max(tokens.length + ansStr.length + 3, 14);
 
             let topPadRow = createRowElement();
@@ -613,7 +629,6 @@
                 mainRow.appendChild(cell);
                 colIdx++;
             }
-
             let ansInputs = [];
             for (let i = 0; i < ansStr.length; i++) {
                 let cell = createCell('', true, ansStr.charAt(i));
@@ -624,9 +639,7 @@
                 ansInputs.push(inp);
                 colIdx++;
             }
-
             inputFlow.push(...ansInputs);
-
             while (colIdx < totalCols) {
                 mainRow.appendChild(createCell(''));
                 colIdx++;
@@ -652,7 +665,6 @@
                 inputFlow.push(...rowInputs);
                 container.appendChild(scratchRow);
             }
-
             bindFlowNavigation();
             focusFirstInput(ansInputs.at(0));
             return;
@@ -694,7 +706,6 @@
                     }
                     if (r === s2.length - 1) tempRow.classList.add('solid-line');
                     container.appendChild(tempRow);
-
                     let activePart = rowCells.slice(1, totalCols - r).reverse();
                     inputFlow.push(...activePart);
                 }
@@ -716,9 +727,7 @@
                 }
             }
             container.appendChild(rowAns);
-
             inputFlow.push(...ansInputs.slice().reverse());
-
             bindFlowNavigation();
             focusFirstInput(inputFlow.at(0));
         } else {
@@ -739,7 +748,6 @@
             let startAnsCol = s1.length + 1;
             let leftRow2Inputs = [];
             let quotientInputs = [];
-
             for (let i = 0; i < totalCols; i++) {
                 let cell;
                 if (i < s1.length) {
@@ -761,7 +769,6 @@
                 row2.appendChild(cell);
             }
             container.appendChild(row2);
-
             inputFlow.push(...quotientInputs);
             inputFlow.push(...leftRow2Inputs);
 
@@ -784,22 +791,18 @@
                 inputFlow.push(...calcInputs);
                 container.appendChild(row);
             }
-
             bindFlowNavigation();
             focusFirstInput(quotientInputs.at(0));
         }
     }
 
-    /* ============ Черчение: построение сетки ============ */
     function buildDrawGrid(container) {
         const box = document.createElement('div');
         box.className = 'draw-container';
-
         const badge = document.createElement('div');
         badge.className = 'draw-mode-badge draw';
         badge.textContent = 'Черчение';
         box.appendChild(badge);
-
         const prompt = document.createElement('div');
         prompt.className = 'draw-prompt';
         prompt.innerHTML = `Нарисуй: <b>${currentDrawTask.name}</b>`;
@@ -807,13 +810,11 @@
 
         const wrap = document.createElement('div');
         wrap.className = 'draw-canvas-wrap';
-
         const svgNS = 'http://www.w3.org/2000/svg';
         const svg = document.createElementNS(svgNS, 'svg');
         svg.setAttribute('id', 'draw-svg');
         svg.setAttribute('viewBox', '0 0 400 260');
 
-        // Фон-сетка
         const defs = document.createElementNS(svgNS, 'defs');
         const pattern = document.createElementNS(svgNS, 'pattern');
         pattern.setAttribute('id', 'draw-grid');
@@ -834,16 +835,15 @@
         bg.setAttribute('height', '100%');
         bg.setAttribute('fill', 'url(#draw-grid)');
         svg.appendChild(bg);
-
         wrap.appendChild(svg);
         box.appendChild(wrap);
 
         const controls = document.createElement('div');
         controls.className = 'draw-controls';
         controls.innerHTML = `
-            <button type="button" onclick="undoLastLine()" style="background:#f39c12;">↩️ Отменить</button>
-            <button type="button" onclick="closeShape()" style="background:#3498db;">🔗 Замкнуть</button>
-            <button type="button" onclick="clearDrawing()" style="background:#e74c3c;">🗑️ Очистить</button>
+            <button type="button" onclick="undoLastLine(); playTick();" style="background:#f39c12;">↩️ Отменить</button>
+            <button type="button" onclick="closeShape(); playTick();" style="background:#3498db;">🔗 Замкнуть</button>
+            <button type="button" onclick="clearDrawing(); playTick();" style="background:#e74c3c;">🗑️ Очистить</button>
         `;
         box.appendChild(controls);
 
@@ -852,7 +852,6 @@
         hint.textContent = currentDrawTask.hint;
         box.appendChild(hint);
 
-        // Эталон (показывается после проверки)
         const etalon = document.createElement('div');
         etalon.className = 'draw-etalon';
         etalon.id = 'draw-etalon';
@@ -861,18 +860,14 @@
             <div class="geom-svg-box" id="draw-etalon-svg"></div>
         `;
         box.appendChild(etalon);
-
         container.appendChild(box);
 
-        // Сброс состояния
         drawPoints = [];
         drawLines = [];
         isDrawingClosed = false;
-
         svg.addEventListener('click', handleDrawClick);
     }
 
-    /* ============ Черчение: логика рисования ============ */
     function handleDrawClick(e) {
         const svg = document.getElementById('draw-svg');
         if (!svg || svg.style.pointerEvents === 'none') return;
@@ -888,8 +883,6 @@
     function addDrawPoint(x, y) {
         const svg = document.getElementById('draw-svg');
         const svgNS = 'http://www.w3.org/2000/svg';
-
-        // Точка
         const circle = document.createElementNS(svgNS, 'circle');
         circle.setAttribute('cx', x);
         circle.setAttribute('cy', y);
@@ -897,10 +890,9 @@
         circle.setAttribute('fill', '#e74c3c');
         circle.setAttribute('class', 'draw-point');
         svg.appendChild(circle);
-
         drawPoints.push({ x, y });
+        playClick();
 
-        // Линия от предыдущей точки
         if (drawPoints.length >= 2) {
             const prev = drawPoints[drawPoints.length - 2];
             const line = document.createElementNS(svgNS, 'line');
@@ -914,13 +906,13 @@
             line.setAttribute('class', 'draw-line');
             svg.appendChild(line);
             drawLines.push({ x1: prev.x, y1: prev.y, x2: x, y2: y });
+            playDraw();
         }
     }
 
     function undoLastLine() {
         const svg = document.getElementById('draw-svg');
         if (!svg) return;
-
         if (isDrawingClosed) {
             const lines = svg.querySelectorAll('.draw-line');
             if (lines.length > 0) {
@@ -930,13 +922,10 @@
             isDrawingClosed = false;
             return;
         }
-
         if (drawPoints.length === 0) return;
-
         const points = svg.querySelectorAll('.draw-point');
         if (points.length > 0) points[points.length - 1].remove();
         drawPoints.pop();
-
         const lines = svg.querySelectorAll('.draw-line');
         if (lines.length > 0) {
             lines[lines.length - 1].remove();
@@ -948,7 +937,6 @@
         if (drawPoints.length < 3 || isDrawingClosed) return;
         const first = drawPoints[0];
         const last = drawPoints[drawPoints.length - 1];
-
         const svg = document.getElementById('draw-svg');
         const svgNS = 'http://www.w3.org/2000/svg';
         const line = document.createElementNS(svgNS, 'line');
@@ -961,9 +949,10 @@
         line.setAttribute('stroke-linecap', 'round');
         line.setAttribute('class', 'draw-line');
         svg.appendChild(line);
-
         drawLines.push({ x1: last.x, y1: last.y, x2: first.x, y2: first.y });
         isDrawingClosed = true;
+        playClose();
+        playVibrate([30, 20, 30]);
     }
 
     function clearDrawing() {
@@ -975,17 +964,13 @@
         isDrawingClosed = false;
     }
 
-    /* ============ Черчение: проверка ============ */
     function getLineLength(l) {
         return Math.sqrt((l.x2 - l.x1) ** 2 + (l.y2 - l.y1) ** 2);
     }
-
     function calcAngleAtPoint(vertexIdx) {
-        // угол между двумя линиями, выходящими из точки vertexIdx
         if (drawPoints.length < 3) return 0;
         const p = drawPoints[vertexIdx];
         const neighbors = [];
-        // Ищем линии, связанные с этой точкой
         drawLines.forEach(ln => {
             const dx1 = Math.abs(ln.x1 - p.x);
             const dy1 = Math.abs(ln.y1 - p.y);
@@ -1007,29 +992,24 @@
         const clamped = Math.min(1, Math.max(0, cos));
         return Math.acos(clamped) * 180 / Math.PI;
     }
-
     function checkEqualSides(toleranceRatio) {
         if (drawLines.length < 2) return false;
         const lengths = drawLines.map(getLineLength);
         const avg = lengths.reduce((a, b) => a + b, 0) / lengths.length;
         return lengths.every(l => Math.abs(l - avg) <= avg * toleranceRatio);
     }
-
     function checkRightAngles() {
         if (drawPoints.length < 3) return false;
-        // Проверяем все внутренние углы (для 4-угольника)
         for (let i = 0; i < drawPoints.length; i++) {
             const angle = calcAngleAtPoint(i);
             if (angle < 60 || angle > 120) return false;
         }
         return true;
     }
-
     function checkDrawAnswer() {
         const task = currentDrawTask;
         let passed = true;
         let feedback = '';
-
         if (drawLines.length < task.minLines) {
             passed = false;
             feedback = `Мало линий. Нужно минимум ${task.minLines}.`;
@@ -1066,7 +1046,6 @@
                 feedback = 'Стороны не равны. В ромбе все стороны должны быть примерно одинаковыми.';
             }
         }
-
         return { passed, feedback };
     }
 
@@ -1075,7 +1054,6 @@
         row.className = 'matrix-row';
         return row;
     }
-
     function createCell(char = '', isInput = false, expected = '') {
         let cell = document.createElement('div');
         cell.className = 'matrix-cell';
@@ -1104,9 +1082,9 @@
                 const nextInp = inputFlow.at(idx + 1);
                 if (this.value.length === 1 && nextInp) {
                     nextInp.focus();
+                    playTick();
                 }
             });
-
             inp.addEventListener('keydown', function(e) {
                 if (e.key === 'Backspace') {
                     if (this.value === '' && idx - 1 >= 0) {
@@ -1115,6 +1093,7 @@
                         if (prevInp) {
                             prevInp.focus();
                             prevInp.value = '';
+                            playTick();
                         }
                     }
                 } else if (e.key === 'Enter') {
@@ -1134,7 +1113,6 @@
                     if (nextCell && nextCell.querySelector('input')) nextCell.querySelector('input').focus();
                 }
             });
-
             inp.addEventListener('focus', function() {
                 this.select();
             });
@@ -1145,28 +1123,19 @@
         const msg = document.getElementById('result-msg');
 
         if (currentOperation === 'geom') {
-            // === Режим ЧЕРЧЕНИЕ ===
             if (currentGeomMode === 'draw') {
                 const result = checkDrawAnswer();
-
-                // Показать эталон
                 const etalonBox = document.getElementById('draw-etalon');
                 if (etalonBox) {
                     const etalonSvg = document.getElementById('draw-etalon-svg');
-                    // Найдём соответствующую SVG-фигуру из geometryTasks по имени
-                    const match = geometryTasks.find(t =>
-                        t.name.toLowerCase() === currentDrawTask.name.toLowerCase()
-                    );
+                    const match = geometryTasks.find(t => t.name.toLowerCase() === currentDrawTask.name.toLowerCase());
                     if (match && etalonSvg) {
                         etalonSvg.innerHTML = match.svg;
                     } else if (etalonSvg) {
-                        // Если нет точного совпадения — просто текст
                         etalonSvg.innerHTML = `<div style="padding:20px;font-weight:bold;color:#2c3e50;">${currentDrawTask.name}</div>`;
                     }
                     etalonBox.classList.add('show');
                 }
-
-                // Блокируем дальнейшее рисование
                 const svg = document.getElementById('draw-svg');
                 if (svg) svg.style.pointerEvents = 'none';
 
@@ -1175,24 +1144,27 @@
                     incrementGeomUnlockProgress();
                     msg.innerHTML = `Отлично! ${currentDrawTask.name} нарисован правильно. 🌟`;
                     msg.className = "correct-text";
+                    playSuccess();
+                    playVibrate([40, 30, 50]);
                 } else {
                     msg.innerHTML = `Почти! ${result.feedback}`;
                     msg.className = "incorrect-text";
+                    playError();
+                    playVibrate([80, 40, 80]);
                 }
-
                 document.getElementById('check-btn').style.display = 'none';
                 document.getElementById('next-btn').style.display = 'flex';
                 document.getElementById('correct-counter').textContent = correctCount;
                 return;
             }
 
-            // === Режим ТЕСТ ===
             if (!selectedGeomAnswer) {
                 msg.innerHTML = "Сначала нажми на один из трёх вариантов!";
                 msg.className = "incorrect-text";
+                playError();
+                playVibrate([60]);
                 return;
             }
-
             const buttons = document.querySelectorAll('.geom-opt-btn');
             buttons.forEach(btn => {
                 btn.disabled = true;
@@ -1202,16 +1174,18 @@
                     btn.classList.add('cell-incorrect');
                 }
             });
-
             if (selectedGeomAnswer === currentGeomTask.name) {
                 correctCount++;
                 msg.innerHTML = `Верно! Это ${currentGeomTask.name.toLowerCase()}. 🌟`;
                 msg.className = "correct-text";
+                playSuccess();
+                playVibrate([40, 30, 50]);
             } else {
                 msg.innerHTML = `Ошибка! Правильный ответ: ${currentGeomTask.name}.`;
                 msg.className = "incorrect-text";
+                playError();
+                playVibrate([80, 40, 80]);
             }
-
             document.getElementById('check-btn').style.display = 'none';
             document.getElementById('next-btn').style.display = 'flex';
             document.getElementById('correct-counter').textContent = correctCount;
@@ -1220,27 +1194,24 @@
 
         let allCorrect = true;
         let hasEmptyFields = false;
-
         solutionMatrix.forEach(input => {
             if (input.value.trim() === "") {
                 hasEmptyFields = true;
             }
         });
-
         if (hasEmptyFields) {
             msg.innerHTML = "Сначала заполни все клетки ответа!";
             msg.className = "incorrect-text";
+            playError();
+            playVibrate([60]);
             const emptyCell = solutionMatrix.slice().reverse().find(el => el.value.trim() === "");
             if (emptyCell) emptyCell.focus();
             return;
         }
-
         document.querySelectorAll('.matrix-cell input').forEach(inp => inp.disabled = true);
-
         solutionMatrix.forEach(input => {
             let userVal = input.value.trim();
             let correctVal = input.dataset.expected;
-
             if (userVal === correctVal) {
                 input.className = 'cell-correct';
             } else {
@@ -1248,17 +1219,19 @@
                 allCorrect = false;
             }
         });
-
         if (allCorrect) {
             correctCount++;
             incrementGeomUnlockProgress();
             msg.innerHTML = "Абсолютно верно! Присвоено 1 очко. 🌟";
             msg.className = "correct-text";
+            playSuccess();
+            playVibrate([40, 30, 50]);
         } else {
             msg.innerHTML = `Ошибка! Правильный ответ: ${currentCorrectAnswer}.`;
             msg.className = "incorrect-text";
+            playError();
+            playVibrate([80, 40, 80]);
         }
-
         document.getElementById('check-btn').style.display = 'none';
         document.getElementById('next-btn').style.display = 'flex';
         document.getElementById('correct-counter').textContent = correctCount;
@@ -1270,9 +1243,12 @@
         const topicTitle = operationNames[currentOperation] || 'Математика';
         document.getElementById('final-score').innerHTML = `Тема: <b>${topicTitle}</b><br>Ваш итоговый результат:<br><b style="font-size: 2rem; color: #2ecc71;">${correctCount}</b> из ${maxTasks} правильных<span class="modal-meta">Выполнено: ${dateStr}</span>`;
         document.getElementById('finish-modal').style.display = 'flex';
+        playFinish();
+        playVibrate([50, 30, 50, 30, 80]);
     }
 
     function goToNextTask() {
+        playTick();
         if (currentTaskIndex < maxTasks) {
             currentTaskIndex++;
             generateExample();
@@ -1288,7 +1264,7 @@
         generateExample();
     }
 
-    /* ============ Черновик (scratchpad) ============ */
+    /* ============ Черновик ============ */
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     const pad = document.getElementById('pad');
@@ -1302,7 +1278,6 @@
         const w = pad.clientWidth;
         const h = pad.clientHeight - padHeader.offsetHeight;
         if (w <= 0 || h <= 0) return;
-
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = canvas.width;
         tempCanvas.height = canvas.height;
@@ -1310,10 +1285,8 @@
         if (canvas.width > 0 && canvas.height > 0) {
             tempCtx.drawImage(canvas, 0, 0);
         }
-
         canvas.width = w;
         canvas.height = h;
-
         ctx.strokeStyle = '#0052cc';
         ctx.lineWidth = 3;
         ctx.lineCap = 'round';
@@ -1328,12 +1301,10 @@
         pad.classList.toggle('expanded');
         requestAnimationFrame(resizeCanvas);
     });
-
     btnPadClear.addEventListener('click', function(e) {
         e.stopPropagation();
         ctx.clearRect(0, 0, canvas.width, canvas.height);
     });
-
     canvas.addEventListener('pointerdown', function(e) {
         if (activeDrawPointer !== null) return;
         activeDrawPointer = e.pointerId;
@@ -1346,7 +1317,6 @@
         ctx.lineTo(x + 0.1, y + 0.1);
         ctx.stroke();
     });
-
     canvas.addEventListener('pointermove', function(e) {
         if (e.pointerId !== activeDrawPointer) return;
         const rect = canvas.getBoundingClientRect();
@@ -1355,7 +1325,6 @@
         ctx.lineTo(x, y);
         ctx.stroke();
     });
-
     function endDrawPointer(e) {
         if (e.pointerId === activeDrawPointer) {
             activeDrawPointer = null;
@@ -1367,7 +1336,6 @@
     let activeDragPointer = null;
     let dragOffsetX = 0;
     let dragOffsetY = 0;
-
     padHeader.addEventListener('pointerdown', function(e) {
         if (e.target.tagName === 'BUTTON') return;
         activeDragPointer = e.pointerId;
@@ -1380,7 +1348,6 @@
         pad.style.left = rect.left + 'px';
         pad.style.top = rect.top + 'px';
     });
-
     padHeader.addEventListener('pointermove', function(e) {
         if (e.pointerId !== activeDragPointer) return;
         const newLeft = Math.max(0, Math.min(window.innerWidth - pad.offsetWidth, e.clientX - dragOffsetX));
@@ -1388,7 +1355,6 @@
         pad.style.left = newLeft + 'px';
         pad.style.top = newTop + 'px';
     });
-
     function endDragPointer(e) {
         if (e.pointerId === activeDragPointer) {
             activeDragPointer = null;
